@@ -14,7 +14,7 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  azureServiceConnection: "REPLACE-WITH-AZURE-SERVICE-CONNECTION"
+  azureServiceConnection: "Azure-Service-Connection"
   workingDirectory: $(System.DefaultWorkingDirectory)
   planFile: tfplan
   # Configure azureServiceConnection as an Azure Resource Manager service connection using workload identity federation.
