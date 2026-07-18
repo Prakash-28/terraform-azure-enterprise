@@ -1,0 +1,59 @@
+trigger: none
+pr: none
+
+resources:
+  pipelines:
+    - pipeline: terraformCI
+      source: terraform-azure-enterprise-ci
+      trigger:
+        branches:
+          include:
+            - main
+            - master
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  # Update this to your Azure DevOps ARM service connection name.
+  azureServiceConnection: terraform-azurerm-sc
+  workingDirectory: $(System.DefaultWorkingDirectory)
+  planFile: tfplan
+
+stages:
+  - stage: Apply
+    displayName: Terraform Apply
+    jobs:
+      - deployment: apply
+        displayName: Apply Terraform Plan
+        environment: terraform-prod
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: DownloadPipelineArtifact@2
+                  displayName: Download Plan Artifact from CI
+                  inputs:
+                    buildType: specific
+                    project: $(System.TeamProject)
+                    pipeline: $(resources.pipeline.terraformCI.pipelineID)
+                    runVersion: specific
+                    runId: $(resources.pipeline.terraformCI.runID)
+                    artifactName: terraform-plan
+                    targetPath: $(workingDirectory)
+
+                - task: AzureCLI@2
+                  displayName: Terraform Init and Apply
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    workingDirectory: $(workingDirectory)
+                    inlineScript: |
+                      set -euo pipefail
+
+                      terraform version
+                      terraform init -reconfigure
+                      terraform apply -auto-approve $(planFile)
