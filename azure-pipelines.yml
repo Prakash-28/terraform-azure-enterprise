@@ -14,9 +14,10 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
+  azureServiceConnection: "REPLACE-WITH-AZURE-SERVICE-CONNECTION"
   workingDirectory: $(System.DefaultWorkingDirectory)
   planFile: tfplan
-  # Set ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_TENANT_ID, ARM_SUBSCRIPTION_ID in Azure DevOps variables.
+  # Configure azureServiceConnection as an Azure Resource Manager service connection using workload identity federation.
 
 stages:
   - stage: Plan
@@ -46,33 +47,23 @@ stages:
                 Write-Host "##vso[task.prependpath]$installDir"
                 $env:PATH = "${installDir}:$env:PATH"
 
-          - task: PowerShell@2
+          - task: AzureCLI@2
             displayName: Terraform Init/Validate/Plan
             inputs:
-              pwsh: true
+              azureSubscription: $(azureServiceConnection)
+              scriptType: pscore
+              scriptLocation: inlineScript
               workingDirectory: $(workingDirectory)
-              targetType: inline
-              script: |
+              inlineScript: |
                 $ErrorActionPreference = 'Stop'
 
-                $required = @('ARM_CLIENT_ID', 'ARM_CLIENT_SECRET', 'ARM_TENANT_ID', 'ARM_SUBSCRIPTION_ID')
-                foreach ($name in $required) {
-                  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
-                    throw "Missing required pipeline variable: $name"
-                  }
-                }
+                az account show
 
                 terraform version
                 terraform init -reconfigure -upgrade
                 terraform fmt -check -recursive
                 terraform validate
                 terraform plan -out=$(planFile)
-            env:
-              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
-              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
-              ARM_TENANT_ID: $(ARM_TENANT_ID)
-              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
-              ARM_USE_MSI: "false"
 
           - task: PublishPipelineArtifact@1
             displayName: Publish Terraform Plan Artifact

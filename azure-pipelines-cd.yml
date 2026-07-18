@@ -15,12 +15,10 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
+  azureServiceConnection: "Azure-Service-Connection"
   workingDirectory: $(System.DefaultWorkingDirectory)
   planFile: tfplan
-  # Set these in Azure DevOps Variables (mark ARM_CLIENT_SECRET as secret).
-  ARM_CLIENT_ID: "f915da9a-36b2-4ba1-aa53-80a73c95cb82"
-  ARM_TENANT_ID: "24f51288-71f7-4dad-b039-7e6cb6747430"
-  ARM_SUBSCRIPTION_ID: "ab5f7d8f-0d00-44d8-af07-0180e47f887b"
+  # Configure azureServiceConnection as an Azure Resource Manager service connection using workload identity federation.
 
 stages:
   - stage: Apply
@@ -35,6 +33,25 @@ stages:
               steps:
                 - checkout: self
 
+                - task: PowerShell@2
+                  displayName: Install Terraform
+                  inputs:
+                    pwsh: true
+                    targetType: inline
+                    script: |
+                      $ErrorActionPreference = 'Stop'
+
+                      $tfVersion = '1.15.8'
+                      $zipPath = Join-Path $env:AGENT_TEMPDIRECTORY "terraform_${tfVersion}_linux_amd64.zip"
+                      $installDir = Join-Path $env:AGENT_TEMPDIRECTORY 'terraform-bin'
+
+                      Invoke-WebRequest -Uri "https://releases.hashicorp.com/terraform/$tfVersion/terraform_${tfVersion}_linux_amd64.zip" -OutFile $zipPath
+                      New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+                      Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
+
+                      Write-Host "##vso[task.prependpath]$installDir"
+                      $env:PATH = "${installDir}:$env:PATH"
+
                 - task: DownloadPipelineArtifact@2
                   displayName: Download Plan Artifact from CI
                   inputs:
@@ -46,20 +63,17 @@ stages:
                     artifactName: terraform-plan
                     targetPath: $(workingDirectory)
 
-                - task: Bash@3
+                - task: AzureCLI@2
                   displayName: Terraform Init and Apply
                   inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: pscore
+                    scriptLocation: inlineScript
                     workingDirectory: $(workingDirectory)
-                    targetType: inline
                     inlineScript: |
-                      set -euo pipefail
+                      $ErrorActionPreference = 'Stop'
 
+                      az account show
                       terraform version
-                      terraform init -reconfigure
+                      terraform init -reconfigure -upgrade
                       terraform apply -auto-approve $(planFile)
-                  env:
-                    ARM_CLIENT_ID: $(ARM_CLIENT_ID)
-                    ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
-                    ARM_TENANT_ID: $(ARM_TENANT_ID)
-                    ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
-                    ARM_USE_MSI: "false"
