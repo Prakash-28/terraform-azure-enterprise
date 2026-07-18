@@ -38,6 +38,21 @@ stages:
               targetType: inline
               script: |
                 $ErrorActionPreference = 'Stop'
+
+                # Hosted agents may not have terraform in PATH. Install it on demand.
+                if (-not (Get-Command terraform -ErrorAction SilentlyContinue)) {
+                  $tfVersion = '1.9.8'
+                  $zipPath = Join-Path $env:AGENT_TEMPDIRECTORY "terraform_${tfVersion}_linux_amd64.zip"
+                  $installDir = Join-Path $env:AGENT_TEMPDIRECTORY 'terraform-bin'
+
+                  Invoke-WebRequest -Uri "https://releases.hashicorp.com/terraform/$tfVersion/terraform_${tfVersion}_linux_amd64.zip" -OutFile $zipPath
+                  New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+                  Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
+
+                  Write-Host "##vso[task.prependpath]$installDir"
+                  $env:PATH = "$installDir:$env:PATH"
+                }
+
                 terraform version
                 terraform init -reconfigure
                 terraform fmt -check -recursive
