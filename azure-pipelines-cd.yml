@@ -16,7 +16,7 @@ pool:
 
 variables:
   # Update this to your Azure DevOps ARM service connection name.
-  azureServiceConnection: terraform-azurerm-sc
+  azureServiceConnection: Azure-Service-Connection
   workingDirectory: $(System.DefaultWorkingDirectory)
   planFile: tfplan
 
