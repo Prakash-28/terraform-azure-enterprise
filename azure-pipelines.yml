@@ -14,10 +14,12 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  # Update this to your Azure DevOps ARM service connection name.
-  azureServiceConnection: Azure-Service-Connection
   workingDirectory: $(System.DefaultWorkingDirectory)
   planFile: tfplan
+  # Set these in Azure DevOps Variables (mark ARM_CLIENT_SECRET as secret).
+  ARM_CLIENT_ID: ""
+  ARM_TENANT_ID: ""
+  ARM_SUBSCRIPTION_ID: ""
 
 stages:
   - stage: Plan
@@ -28,28 +30,25 @@ stages:
         steps:
           - checkout: self
 
-          - task: AzureCLI@2
+          - task: PowerShell@2
             displayName: Terraform Init/Validate/Plan
             inputs:
-              azureSubscription: $(azureServiceConnection)
-              addSpnToEnvironment: true
-              scriptType: bash
-              scriptLocation: inlineScript
+              pwsh: true
               workingDirectory: $(workingDirectory)
-              inlineScript: |
-                set -euo pipefail
-
-                export ARM_CLIENT_ID="$servicePrincipalId"
-                export ARM_CLIENT_SECRET="$servicePrincipalKey"
-                export ARM_TENANT_ID="$tenantId"
-                export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
-                export ARM_USE_MSI=false
-
+              targetType: inline
+              script: |
+                $ErrorActionPreference = 'Stop'
                 terraform version
                 terraform init -reconfigure
                 terraform fmt -check -recursive
                 terraform validate
                 terraform plan -out=$(planFile)
+            env:
+              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+              ARM_TENANT_ID: $(ARM_TENANT_ID)
+              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+              ARM_USE_MSI: "false"
 
           - task: PublishPipelineArtifact@1
             displayName: Publish Terraform Plan Artifact
