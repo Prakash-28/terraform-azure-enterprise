@@ -5,7 +5,7 @@ resource "azurerm_public_ip" "vm_pip" {
   name                = var.public_ip_name
   location            = var.location
   resource_group_name = var.resource_group_name
-  allocation_method   = "Dynamic"
+  allocation_method   = "Static"
   sku                 = "Standard"
 }
 
@@ -25,6 +25,7 @@ resource "azurerm_network_interface" "vm_nic" {
 # Creation of Virtual Machine
 resource "azurerm_linux_virtual_machine" "linux_vm" {
     name           = var.vm_name
+    computer_name  = substr(replace(var.vm_name, "_", "-"), 0, 64)
     resource_group_name = var.resource_group_name
     location       = var.location
     size           = var.vm_size
