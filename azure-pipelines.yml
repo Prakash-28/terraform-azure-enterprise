@@ -17,9 +17,9 @@ variables:
   workingDirectory: $(System.DefaultWorkingDirectory)
   planFile: tfplan
   # Set these in Azure DevOps Variables (mark ARM_CLIENT_SECRET as secret).
-  ARM_CLIENT_ID: ""
-  ARM_TENANT_ID: ""
-  ARM_SUBSCRIPTION_ID: ""
+  ARM_CLIENT_ID: "f915da9a-36b2-4ba1-aa53-80a73c95cb82"
+  ARM_TENANT_ID: "24f51288-71f7-4dad-b039-7e6cb6747430"
+  ARM_SUBSCRIPTION_ID: "ab5f7d8f-0d00-44d8-af07-0180e47f887b"
 
 stages:
   - stage: Plan
