@@ -2,20 +2,27 @@ trigger:
 - main
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'ubuntu-latest'
 
 steps:
 
+# Install Terraform
 - task: TerraformInstaller@1
-  displayName: Install Terraform
+  displayName: 'Install Terraform'
   inputs:
-    terraformVersion: latest
+    terraformVersion: 'latest'
 
-- script: terraform init
-  displayName: Terraform Init
+# Terraform Init, Format, Validate and Plan
+- task: AzureCLI@2
+  displayName: 'Terraform Init, Validate and Plan'
+  inputs:
+    azureSubscription: 'Azure-Service-Connection'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    workingDirectory: '$(System.DefaultWorkingDirectory)'
 
-- script: terraform validate
-  displayName: Terraform Validate
-
-- script: terraform plan
-  displayName: Terraform Plan
+    inlineScript: |
+      terraform init
+      terraform fmt -check
+      terraform validate
+      terraform plan
