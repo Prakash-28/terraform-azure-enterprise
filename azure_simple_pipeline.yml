@@ -93,7 +93,6 @@ stages:
     jobs:
       - job: waitForValidation
         displayName: Wait for Manual Approval
-        pool: server
         timeoutInMinutes: 1440
         steps:
           - task: ManualValidation@0
@@ -101,3 +100,61 @@ stages:
             inputs:
               notifyUsers: 'prakash.vidjiacoumar@gmail.com'
               instructions: 'Review the Terraform plan and approve for production deployment. This will apply infrastructure changes to your production environment.'
+  - stage: Apply
+    displayName: Terraform Apply (CD)
+    dependsOn: 
+      - Plan
+      - ApprovalGate
+    condition: |
+      and(
+        succeeded('Plan'),
+        or(
+          eq('${{ parameters.environment }}', 'dev'),
+          eq('${{ parameters.environment }}', 'test'),
+          succeeded('ApprovalGate')
+        )
+      )
+    jobs:
+      - job: apply
+        displayName: Apply Terraform Plan
+        steps:
+          - checkout: self
+
+          - task: PowerShell@2
+            displayName: Install Terraform
+            inputs:
+              pwsh: true
+              targetType: inline
+              script: |
+                $ErrorActionPreference = 'Stop'
+
+                $tfVersion = '$(tfVersion)'
+                $zipPath = Join-Path $env:AGENT_TEMPDIRECTORY "terraform_${tfVersion}_linux_amd64.zip"
+                $installDir = Join-Path $env:AGENT_TEMPDIRECTORY 'terraform-bin'
+
+                Invoke-WebRequest -Uri "https://releases.hashicorp.com/terraform/$tfVersion/terraform_${tfVersion}_linux_amd64.zip" -OutFile $zipPath
+                New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+                Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
+
+                Write-Host "##vso[task.prependpath]$installDir"
+                $env:PATH = "${installDir}:$env:PATH"
+
+          - task: DownloadPipelineArtifact@2
+            displayName: Download Terraform Plan
+            inputs:
+              artifactName: 'terraform-plan-${{ parameters.environment }}'
+              targetPath: '$(workingDirectory)'
+
+          - task: AzureCLI@2
+            displayName: 'Terraform Apply for ${{ parameters.environment }}'
+            inputs:
+              azureSubscription: '$(serviceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              workingDirectory: '$(workingDirectory)'
+
+              inlineScript: |
+                echo "=== Applying Terraform for environment: ${{ parameters.environment }} ==="
+                terraform init -backend-config="key=$(backendKey)"
+                terraform apply -auto-approve tfplan-${{ parameters.environment }}
+                echo "=== Successfully applied infrastructure changes ==="
