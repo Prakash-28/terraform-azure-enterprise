@@ -45,4 +45,4 @@ stages:
                 terraform init
                 terraform fmt -check
                 terraform validate
-                terraform plan -var="ssh_public_key=$(SSH_PUBLIC_KEY)"
+                terraform plan
