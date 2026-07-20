@@ -4,25 +4,45 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
-steps:
+stages:
+  - stage: Init and Plan
+    displayName: Terraform Init and Plan
+    jobs:
+      - job: plan
+        displayName: Validate and Plan
+        steps:
+          - checkout: self
 
-# Install Terraform
-- task: TerraformInstaller@1
-  displayName: 'Install Terraform'
-  inputs:
-    terraformVersion: 'latest'
+          - task: PowerShell@2
+            displayName: Install Terraform
+            inputs:
+              pwsh: true
+              targetType: inline
+              script: |
+                $ErrorActionPreference = 'Stop'
 
-# Terraform Init, Format, Validate and Plan
-- task: AzureCLI@2
-  displayName: 'Terraform Init, Validate and Plan'
-  inputs:
-    azureSubscription: 'Azure-Service-Connection'
-    scriptType: 'bash'
-    scriptLocation: 'inlineScript'
-    workingDirectory: '$(System.DefaultWorkingDirectory)'
+                $tfVersion = '1.15.8'
+                $zipPath = Join-Path $env:AGENT_TEMPDIRECTORY "terraform_${tfVersion}_linux_amd64.zip"
+                $installDir = Join-Path $env:AGENT_TEMPDIRECTORY 'terraform-bin'
 
-    inlineScript: |
-      terraform init
-      terraform fmt -check
-      terraform validate
-      terraform plan
+                Invoke-WebRequest -Uri "https://releases.hashicorp.com/terraform/$tfVersion/terraform_${tfVersion}_linux_amd64.zip" -OutFile $zipPath
+                New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+                Expand-Archive -Path $zipPath -DestinationPath $installDir -Force
+
+                Write-Host "##vso[task.prependpath]$installDir"
+                $env:PATH = "${installDir}:$env:PATH"
+
+          # Terraform Init, Format, Validate and Plan
+          - task: AzureCLI@2
+            displayName: 'Terraform Init, Validate and Plan'
+            inputs:
+              azureSubscription: 'Azure-Service-Connection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+              inlineScript: |
+                terraform init
+                terraform fmt -check
+                terraform validate
+                terraform plan
