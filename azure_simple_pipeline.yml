@@ -36,7 +36,7 @@ stages:
           - task: AzureCLI@2
             displayName: 'Terraform Init, Validate and Plan'
             inputs:
-              azureSubscription: 'Azure-Service-Connection'
+              azureSubscription: 'Azure-Service-Connection-DevOps'
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               workingDirectory: '$(System.DefaultWorkingDirectory)'
