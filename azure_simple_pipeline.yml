@@ -91,15 +91,17 @@ stages:
     dependsOn: Plan
     condition: eq('${{ parameters.environment }}', 'prod')
     jobs:
-      - job: waitForValidation
+      - deployment: waitForValidation
         displayName: Wait for Manual Approval
-        timeoutInMinutes: 1440
-        steps:
-          - task: ManualValidation@0
-            displayName: 'Approve Production Deployment'
-            inputs:
-              notifyUsers: 'prakash.vidjiacoumar@gmail.com'
-              instructions: 'Review the Terraform plan and approve for production deployment. This will apply infrastructure changes to your production environment.'
+        environment: 'terraform-prod'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: none
+                - script: echo "Approved for production deployment..."
+                  displayName: 'Production deployment approved'
+
   - stage: Apply
     displayName: Terraform Apply (CD)
     dependsOn: 
