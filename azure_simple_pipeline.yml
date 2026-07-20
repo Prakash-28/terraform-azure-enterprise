@@ -1,8 +1,37 @@
+parameters:
+  - name: environment
+    displayName: 'Select Target Environment'
+    type: string
+    default: 'dev'
+    values:
+      - dev
+      - test
+      - prod
+
 trigger:
 - main
 
 pool:
   vmImage: 'ubuntu-latest'
+
+variables:
+  tfVersion: '1.15.8'
+  workingDirectory: '$(System.DefaultWorkingDirectory)'
+  
+  ${{ if eq(parameters.environment, 'dev') }}:
+    tfvarsFile: 'environments/dev.tfvars'
+    backendKey: 'dev.tfstate'
+    serviceConnection: 'Azure-Service-Connection-DevOps'
+    
+  ${{ if eq(parameters.environment, 'test') }}:
+    tfvarsFile: 'environments/test.tfvars'
+    backendKey: 'test.tfstate'
+    serviceConnection: 'Azure-Service-Connection-DevOps'
+    
+  ${{ if eq(parameters.environment, 'prod') }}:
+    tfvarsFile: 'environments/prod.tfvars'
+    backendKey: 'prod.tfstate'
+    serviceConnection: 'Azure-Service-Connection-DevOps'
 
 stages:
   - stage: Plan
@@ -21,7 +50,7 @@ stages:
               script: |
                 $ErrorActionPreference = 'Stop'
 
-                $tfVersion = '1.15.8'
+                $tfVersion = '$(tfVersion)'
                 $zipPath = Join-Path $env:AGENT_TEMPDIRECTORY "terraform_${tfVersion}_linux_amd64.zip"
                 $installDir = Join-Path $env:AGENT_TEMPDIRECTORY 'terraform-bin'
 
@@ -34,15 +63,41 @@ stages:
 
           # Terraform Init, Format, Validate and Plan
           - task: AzureCLI@2
-            displayName: 'Terraform Init, Validate and Plan'
+            displayName: 'Terraform Init, Validate and Plan for ${{ parameters.environment }}'
             inputs:
-              azureSubscription: 'Azure-Service-Connection-DevOps'
+              azureSubscription: '$(serviceConnection)'
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
-              workingDirectory: '$(System.DefaultWorkingDirectory)'
+              workingDirectory: '$(workingDirectory)'
 
               inlineScript: |
-                terraform init
+                echo "Planning Terraform for environment: ${{ parameters.environment }}"
+                terraform init -backend-config="key=$(backendKey)"
                 terraform fmt -check
                 terraform validate
-                terraform plan
+                terraform plan \
+                  -var-file="$(tfvarsFile)" \
+                  -out=tfplan-${{ parameters.environment }}
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Terraform Plan Artifact'
+            inputs:
+              targetPath: '$(workingDirectory)/tfplan-${{ parameters.environment }}'
+              artifact: 'terraform-plan-${{ parameters.environment }}'
+              publishLocation: pipeline
+
+  - stage: ApprovalGate
+    displayName: Approval Gate - Production
+    dependsOn: Plan
+    condition: eq('${{ parameters.environment }}', 'prod')
+    jobs:
+      - job: waitForValidation
+        displayName: Wait for Manual Approval
+        pool: server
+        timeoutInMinutes: 1440
+        steps:
+          - task: ManualValidation@0
+            displayName: 'Approve Production Deployment'
+            inputs:
+              notifyUsers: 'prakash.vidjiacoumar@gmail.com'
+              instructions: 'Review the Terraform plan and approve for production deployment. This will apply infrastructure changes to your production environment.'
