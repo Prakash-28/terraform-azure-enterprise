@@ -37,3 +37,8 @@ variable "web_subnet_id" {
 description = "Subnet ID for VM NIC"
 type = string
 }
+
+variable "ssh_public_key" {
+  description = "SSH Public Key"
+  type        = string
+}
